@@ -1,0 +1,175 @@
+import os
+import requests
+import pandas as pd
+import time
+from datetime import datetime
+
+# Tenta carregar as variáveis do arquivo .env se a biblioteca python-dotenv estiver instalada
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Puxa as credenciais das variáveis de ambiente de forma segura
+API_KEY = os.getenv("RIOT_API_KEY")
+PUUID = os.getenv("RIOT_PUUID")
+
+# Validação para garantir que as credenciais foram configuradas
+if not API_KEY or not PUUID:
+    raise ValueError(
+        "ERRO: Chave de API ou PUUID não encontrados! "
+        "Certifique-se de configurar o arquivo .env ou as variáveis de ambiente."
+    )
+
+headers = {"X-Riot-Token": API_KEY}
+
+dados = []
+todos_match_ids = []
+
+
+# =========================
+# FUNÇÃO PARA REQUISIÇÃO
+# =========================
+def fazer_requisicao(url):
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 429:
+        print("Limite atingido. Aguardando 10 segundos...")
+        time.sleep(10)
+        response = requests.get(url, headers=headers)
+
+    return response
+
+
+# =========================
+# BUSCAR IDS DAS PARTIDAS
+# =========================
+for start in range(0, 1000, 100):
+    print(f"Buscando IDs {start} até {start + 100}...")
+
+    url = f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{PUUID}/ids?start={start}&count=100"
+    response = fazer_requisicao(url)
+
+    if response.status_code != 200:
+        print(f"Erro ao buscar IDs: {response.status_code}")
+        print(response.text)
+        break
+
+    match_ids = response.json()
+
+    if len(match_ids) == 0:
+        print("Não há mais partidas disponíveis.")
+        break
+
+    todos_match_ids.extend(match_ids)
+    time.sleep(1.5)
+
+print(f"Total de partidas encontradas: {len(todos_match_ids)}")
+
+
+# =========================
+# EXTRAIR DADOS DAS PARTIDAS
+# =========================
+for index, match_id in enumerate(todos_match_ids, start=1):
+    print(f"[{index}/{len(todos_match_ids)}] Buscando partida {match_id}...")
+
+    url = f"https://americas.api.riotgames.com/lol/match/v5/matches/{match_id}"
+    response = fazer_requisicao(url)
+
+    if response.status_code != 200:
+        print(f"Erro na partida {match_id}: {response.status_code}")
+        print(response.text)
+        continue
+
+    match = response.json()
+    info = match["info"]
+
+    jogador = next((p for p in info["participants"] if p["puuid"] == PUUID), None)
+
+    if jogador is None:
+        print(f"Jogador não encontrado na partida {match_id}")
+        continue
+
+    duracao_min = info["gameDuration"] / 60
+
+    if duracao_min == 0:
+        continue
+
+    kills = jogador.get("kills", 0)
+    deaths = jogador.get("deaths", 0)
+    assists = resolver_assists = jogador.get("assists", 0)
+
+    kda = (kills + assists) / deaths if deaths > 0 else kills + assists
+    cs = jogador.get("totalMinionsKilled", 0) + jogador.get("neutralMinionsKilled", 0)
+
+    data_hora = datetime.fromtimestamp(info["gameCreation"] / 1000)
+
+    dados.append({
+        "Match ID": match_id,
+        "Data": data_hora.strftime("%d/%m/%Y"),
+        "Hora": data_hora.strftime("%H:%M"),
+        "Dia da Semana": data_hora.strftime("%A"),
+        "Mês": data_hora.strftime("%Y-%m"),
+        "Ano": data_hora.year,
+        "Modo": info.get("gameMode"),
+        "Tipo de Jogo": info.get("gameType"),
+        "Versão do Jogo": info.get("gameVersion"),
+        "Campeão": jogador.get("championName"),
+        "Lane": jogador.get("teamPosition") or jogador.get("individualPosition") or jogador.get("lane") or "Não identificado",
+        "Resultado": "Vitória" if jogador.get("win") else "Derrota",
+        "Kills": kills,
+        "Deaths": deaths,
+        "Assists": assists,
+        "KDA": round(kda, 2),
+        "CS": cs,
+        "CS/min": round(cs / duracao_min, 2),
+        "Dano": jogador.get("totalDamageDealtToChampions", 0),
+        "DPM": round(jogador.get("totalDamageDealtToChampions", 0) / duracao_min, 2),
+        "Gold": jogador.get("goldEarned", 0),
+        "GPM": round(jogador.get("goldEarned", 0) / duracao_min, 2),
+        "Ouro Gasto": jogador.get("goldSpent", 0),
+        "Vision Score": jogador.get("visionScore", 0),
+        "Wards Colocadas": jogador.get("wardsPlaced", 0),
+        "Wards Destruídas": jogador.get("wardsKilled", 0),
+        "Pink Wards": jogador.get("detectorWardsPlaced", 0),
+        "Duração Min": round(duracao_min, 2),
+        "Tempo de Jogo (Horas)": round(duracao_min / 60, 2),
+        "Nível do Campeão": jogador.get("champLevel", 0),
+        "Dano em Objetivos": jogador.get("damageDealtToObjectives", 0),
+        "Dano em Torres": jogador.get("damageDealtToTurrets", 0),
+        "Dano Sofrido": jogador.get("totalDamageTaken", 0),
+        "Cura": jogador.get("totalHeal", 0),
+        "Tempo Morto": jogador.get("totalTimeSpentDead", 0),
+        "Double Kills": jogador.get("doubleKills", 0),
+        "Triple Kills": jogador.get("tripleKills", 0),
+        "Quadra Kills": jogador.get("quadraKills", 0),
+        "Penta Kills": jogador.get("pentaKills", 0),
+        "First Blood": jogador.get("firstBloodKill", False),
+        "First Tower": jogador.get("firstTowerKill", False),
+        "Torres Destruídas": jogador.get("turretTakedowns", 0),
+        "Inibidores Destruídos": jogador.get("inhibitorTakedowns", 0),
+        "Dragões": jogador.get("dragonKills", 0),
+        "Barões": jogador.get("baronKills", 0),
+        "Summoner Level": jogador.get("summonerLevel", 0),
+        "Riot ID": jogador.get("riotIdGameName"),
+        "Tag": jogador.get("riotIdTagline"),
+    })
+
+    # Salva parcialmente a cada 50 partidas
+    if index % 50 == 0:
+        df_parcial = pd.DataFrame(dados)
+        df_parcial.to_excel("NatanAnalytics.xlsx", index=False)
+        print(f"Backup salvo com {len(df_parcial)} linhas.")
+
+    time.sleep(1.5)
+
+
+# =========================
+# EXPORTAR EXCEL FINAL
+# =========================
+df = pd.DataFrame(dados)
+df.to_excel("NatanAnalytics.xlsx", index=False)
+
+print("Excel updated successfully: NatanAnalytics.xlsx")
+print(f"Total exported rows: {len(df)}")
