@@ -1,5 +1,13 @@
 # League of Legends Analytics Dashboard
 
+## Dashboard
+
+
+
+
+
+
+
 ## Sobre o projeto
 
 Este projeto consiste em um dashboard interativo desenvolvido em Power BI para análise de desempenho de partidas de League of Legends.
@@ -34,19 +42,6 @@ A proposta foi transformar dados extraídos da Riot Games API em uma experiênci
 * Dano causado
 * Ouro acumulado
 
-## Dashboard
-
-### Visão Geral
-
-[Inserir imagem]
-
-### Insights
-
-[Inserir imagem]
-
-### Jornada do Jogador
-
-[Inserir imagem]
 
 ## Coleta de dados
 
