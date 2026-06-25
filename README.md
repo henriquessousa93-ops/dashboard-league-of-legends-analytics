@@ -1,6 +1,5 @@
 # League of Legends Analytics Dashboard
 
-Demonstração
 ![Dashboard](assets/dashboard-demo.gif.gif)
 
 
