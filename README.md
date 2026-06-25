@@ -1,11 +1,7 @@
 # League of Legends Analytics Dashboard
 
-## Dashboard
+## Demonstração
 ![Dashboard](assets/dashboard-demo.gif.gif)
-
-
-
-
 
 
 ## Sobre o projeto
